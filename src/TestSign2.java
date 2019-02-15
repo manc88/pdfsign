@@ -1,4 +1,6 @@
 
+//https://itextpdf.com/en/resources/examples/itext-5/digital-signatures-chapter-2
+
 /*
  * This class is part of the white paper entitled
  * "Digital Signatures for PDF documents"
