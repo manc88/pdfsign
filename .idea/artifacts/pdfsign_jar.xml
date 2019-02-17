@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="pdfsign:jar">
+    <output-path>D:/temp</output-path>
+    <root id="archive" name="pdfsign.jar">
+      <element id="module-output" name="pdfsign" />
+    </root>
+  </artifact>
+</component>
