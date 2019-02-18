@@ -1,6 +1,7 @@
 
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Image;
+import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Rectangle;
 import com.itextpdf.text.pdf.*;
 import com.itextpdf.text.pdf.security.*;
@@ -21,6 +22,7 @@ import java.util.*;
 
 public class PdfSingApp {
 
+    private static final int padding = 20;
     private static String KEYSTORE;
     private static char[] PASSWORD;
     private static char[] DEFAULTPASSWORD = "pass123".toCharArray();
@@ -32,6 +34,7 @@ public class PdfSingApp {
     private static ExternalDigest digest;
     private static PrivateKey pk;
     private static Certificate[] chain;
+    private static String IMAGEPOS = "LD";
     private static boolean paramsInitialized = true;
     private static boolean useDefaultKeystore = false;
     private static boolean useDefaultImage = false;
@@ -143,7 +146,11 @@ public class PdfSingApp {
 
             float w = img.getScaledWidth();
             float h = img.getScaledHeight();
-            Rectangle rect = new Rectangle(36, 100 - h, 36 + w, 100);
+
+            Rectangle ps = reader.getPageSizeWithRotation(1);
+
+            //Rectangle rect = new Rectangle(20, 20, 20 + w, 20+h);
+            Rectangle rect = getImgRectangle(ps,h,w);
             rect.setBorder(Rectangle.BOX);
             rect.setBorderWidth(2);
 
@@ -216,6 +223,10 @@ public class PdfSingApp {
             SRC = params.get("SRC").get(0);
         }
 
+        if (params.get("IMGPOS")!=null){
+            IMAGEPOS = params.get("IMGPOS").get(0);
+        }
+
         //CERT
         if (params.get("CERT")==null){
             System.out.println("Using default KEYSTORE");
@@ -255,6 +266,26 @@ public class PdfSingApp {
 
         //TEMP
         TEMP = UUID.randomUUID().toString() + ".pdf";
+
+    }
+
+
+    static Rectangle getImgRectangle(Rectangle ps,float imgH,float imgW){
+
+        switch (IMAGEPOS.toUpperCase()) {
+            case "LD":
+                return new Rectangle(padding, padding, padding + imgW, padding+imgH);
+            case "LU":
+                return new Rectangle(padding, ps.getHeight()-imgH-padding, padding + imgW, ps.getHeight()-padding);
+            case "RU":
+                return new Rectangle(ps.getWidth()-padding-imgW, ps.getHeight()-imgH-padding, ps.getWidth()-padding, ps.getHeight()-padding);
+            case "RD":
+                return new Rectangle(ps.getWidth()-padding-imgW, padding, ps.getWidth()-padding, padding+imgH);
+            default:
+                    return new Rectangle(padding, padding, padding + imgW, padding+imgH);
+        }
+
+
 
     }
 
