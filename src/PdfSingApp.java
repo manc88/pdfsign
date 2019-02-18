@@ -1,7 +1,6 @@
 
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Image;
-import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Rectangle;
 import com.itextpdf.text.pdf.*;
 import com.itextpdf.text.pdf.security.*;
@@ -148,8 +147,6 @@ public class PdfSingApp {
             float h = img.getScaledHeight();
 
             Rectangle ps = reader.getPageSizeWithRotation(1);
-
-            //Rectangle rect = new Rectangle(20, 20, 20 + w, 20+h);
             Rectangle rect = getImgRectangle(ps,h,w);
             rect.setBorder(Rectangle.BOX);
             rect.setBorderWidth(2);
