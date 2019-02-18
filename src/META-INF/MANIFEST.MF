@@ -1,4 +1,5 @@
 Manifest-Version: 1.0
-Class-Path: D:\temp\
+Class-Path: bcprov-jdk15on-1.61.jar bcpkix-jdk15on-1.61.jar itextpdf-5
+ .5.13.jar
 Main-Class: PdfSingApp
 

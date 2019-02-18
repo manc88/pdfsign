@@ -23,14 +23,19 @@ public class PdfSingApp {
 
     private static String KEYSTORE;
     private static char[] PASSWORD;
+    private static char[] DEFAULTPASSWORD = "pass123".toCharArray();
     private static String SRC;
     private static String DEST;
     private static String TEMP;
-    private static final String IMG = "src/res/logo.png";
+    private static String IMG;
     private static ExternalSignature pks;
     private static ExternalDigest digest;
     private static PrivateKey pk;
     private static Certificate[] chain;
+    private static boolean paramsInitialized = true;
+    private static boolean useDefaultKeystore = false;
+    private static boolean useDefaultImage = false;
+    private static boolean cryptoInitialized = true;
 
     private final static Map<String, List<String>> params = new HashMap<>();
 
@@ -64,7 +69,21 @@ public class PdfSingApp {
         BouncyCastleProvider provider = new BouncyCastleProvider();
         Security.addProvider(provider);
         KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-        ks.load(new FileInputStream(KEYSTORE), PASSWORD);
+        InputStream stream;
+
+        if(useDefaultKeystore){
+            //stream = new FileInputStream(PdfSingApp.class.getResource("s.p12").getPath());
+            stream = PdfSingApp.class.getResourceAsStream("s.p12");
+            if (stream == null){
+                System.out.println("No default keystore found");
+                cryptoInitialized = false;
+                return;
+            }
+        }else{
+            stream = new FileInputStream(KEYSTORE);
+        }
+
+        ks.load(stream, PASSWORD);
         String alias = ks.aliases().nextElement();
         pk = (PrivateKey) ks.getKey(alias, PASSWORD);
         chain = ks.getCertificateChain(alias);
@@ -104,14 +123,24 @@ public class PdfSingApp {
 
     private static void signWithNoPRINT() throws GeneralSecurityException, IOException, DocumentException {
 
+        Image img;
+        if(useDefaultImage){
+            //img = Image.getInstance(PdfSingApp.class.getClassLoader().getResource("l.png").getPath());
+            InputStream imgStream = PdfSingApp.class.getResourceAsStream("l.png");
+            byte[] targetArray = new byte[imgStream.available()];
+            imgStream.read(targetArray);
+            img = Image.getInstance(targetArray);
+        }else{
+            img = Image.getInstance(IMG);
+        }
+
         try (   InputStream resource = new FileInputStream(SRC);
                 OutputStream os = new FileOutputStream(TEMP)) {
             PdfReader reader = new PdfReader(resource);
             PdfStamper stamper = new PdfStamper(reader, os);
             PdfFormField field = PdfFormField.createSignature(stamper.getWriter());
-            field.setFieldName("Signature");
+            field.setFieldName("SignaturePIK");
 
-            Image img = Image.getInstance(IMG);
             float w = img.getScaledWidth();
             float h = img.getScaledHeight();
             Rectangle rect = new Rectangle(36, 100 - h, 36 + w, 100);
@@ -133,9 +162,9 @@ public class PdfSingApp {
             appearance.setReason("reason");
             appearance.setLocation("location");
             appearance.setCertificationLevel(PdfSignatureAppearance.CERTIFIED_NO_CHANGES_ALLOWED);
-            appearance.setVisibleSignature("Signature");
+            appearance.setVisibleSignature("SignaturePIK");
             appearance.setRenderingMode(PdfSignatureAppearance.RenderingMode.GRAPHIC);
-            appearance.setSignatureGraphic(Image.getInstance(IMG));
+            appearance.setSignatureGraphic(img);
             MakeSignature.signDetached(appearance, digest, pks, chain, null, null, null, 0, CryptoStandard.CMS);
 
         }
@@ -155,18 +184,77 @@ public class PdfSingApp {
         System.out.println("Parsing parameters...");
         parseParams(args);
 
-        SRC = params.get("SRC").get(0);
-        KEYSTORE = params.get("CERT").get(0);
-        PASSWORD = params.get("PIN").get(0).toCharArray();
-        DEST = params.get("OUT").get(0);
-        TEMP = UUID.randomUUID().toString() + ".pdf";
+        System.out.println("Initializing parameters...");
+        initParams();
+
+        if(!paramsInitialized){
+            return;
+        }
 
         System.out.println("BouncyCastle initialization...");
         init();
+
+        if(!cryptoInitialized){
+            return;
+        }
+
         System.out.println("Signing...");
         signWithNoPRINT();
 
         System.out.println("Finished");
+
+    }
+
+    private static void initParams() {
+
+        //SRC
+        if (params.get("SRC")==null){
+            System.out.println("SRC parameter not found");
+            paramsInitialized = false;
+            return;
+        }else{
+            SRC = params.get("SRC").get(0);
+        }
+
+        //CERT
+        if (params.get("CERT")==null){
+            System.out.println("Using default KEYSTORE");
+            useDefaultKeystore = true;
+        }else{
+            KEYSTORE = params.get("CERT").get(0);
+        }
+
+        //PIN
+        if (useDefaultKeystore && params.get("PIN")==null){
+            System.out.println("Using default KEYSTORE PIN");
+            PASSWORD = DEFAULTPASSWORD;
+        }else if(!useDefaultKeystore && params.get("PIN")==null){
+            System.out.println("PIN not found");
+            paramsInitialized = false;
+            return;
+        }else{
+            PASSWORD = params.get("PIN").get(0).toCharArray();
+        }
+
+        //OUT
+        if (params.get("OUT")==null){
+            // expression will remove the last dot followed by one or more characters.
+            DEST = SRC.replaceFirst("[.][^.]+$", "") + "_signed.pdf";
+            System.out.println("Using default OUT name: " + DEST);
+        }else{
+            DEST = params.get("OUT").get(0);
+        }
+
+        //IMG
+        if (params.get("IMG")==null){
+            System.out.println("Using default IMG");
+            useDefaultImage = true;
+        }else{
+            IMG = params.get("IMG").get(0);
+        }
+
+        //TEMP
+        TEMP = UUID.randomUUID().toString() + ".pdf";
 
     }
 
