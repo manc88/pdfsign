@@ -11,11 +11,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.Security;
+import java.security.*;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.util.*;
 
 
@@ -41,85 +39,31 @@ public class PdfSingApp {
 
     private final static Map<String, List<String>> params = new HashMap<>();
 
-    private static void parseParams(String[] args){
 
-        List<String> options = null;
-        for (int i = 0; i < args.length; i++) {
-            final String a = args[i];
+    public static void main(String[] args) throws GeneralSecurityException, IOException, DocumentException {
 
-            if (a.charAt(0) == '-') {
-                if (a.length() < 2) {
-                    System.err.println("Error at argument " + a);
-                    return;
-                }
+        //-src D:\temp\hello.pdf -cert D:\temp\cert.p12 -pin pass123 -out D:\temp\res.pdf -img logo.png -imgpos RU
 
-                options = new ArrayList<>();
-                params.put(a.substring(1).toUpperCase(), options);
-            }
-            else if (options != null) {
-                options.add(a);
-            }
-            else {
-                System.err.println("Illegal parameter usage");
-                return;
-            }
-        }
-    }
+        System.out.println("Parsing parameters...");
+        parseParams(args);
 
-    private static void init() throws GeneralSecurityException, IOException{
+        System.out.println("Initializing parameters...");
+        initParams();
 
-        BouncyCastleProvider provider = new BouncyCastleProvider();
-        Security.addProvider(provider);
-        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-        InputStream stream;
-
-        if(useDefaultKeystore){
-            //stream = new FileInputStream(PdfSingApp.class.getResource("s.p12").getPath());
-            stream = PdfSingApp.class.getResourceAsStream("s.p12");
-            if (stream == null){
-                System.out.println("No default keystore found");
-                cryptoInitialized = false;
-                return;
-            }
-        }else{
-            stream = new FileInputStream(KEYSTORE);
+        if(!paramsInitialized){
+            return;
         }
 
-        ks.load(stream, PASSWORD);
-        String alias = ks.aliases().nextElement();
-        pk = (PrivateKey) ks.getKey(alias, PASSWORD);
-        chain = ks.getCertificateChain(alias);
-        pks = new PrivateKeySignature(pk, "SHA512", "BC");
-        digest = new BouncyCastleDigest();
+        System.out.println("BouncyCastle initialization...");
+        init();
 
-    }
-
-    private static void sign() throws GeneralSecurityException, IOException, DocumentException {
-
-        try (FileOutputStream os = new FileOutputStream(DEST)) {
-
-            PdfReader reader = new PdfReader(SRC);
-            PdfStamper stamper = PdfStamper.createSignature(reader, os, '\0');
-            PdfSignatureAppearance appearance = stamper.getSignatureAppearance();
-
-            appearance.setReason("REASON");
-            appearance.setLocation("LOCATION");
-            appearance.setCertificationLevel(PdfSignatureAppearance.CERTIFIED_NO_CHANGES_ALLOWED);
-
-            Image img = Image.getInstance(IMG);
-            float w = img.getScaledWidth();
-            float h = img.getScaledHeight();
-            Rectangle rect = new Rectangle(36, 100 - h, 36 + w, 100);
-            rect.setBorder(Rectangle.BOX);
-            rect.setBorderWidth(2);
-
-            appearance.setVisibleSignature(rect, 1, appearance.getFieldName());
-            appearance.setRenderingMode(PdfSignatureAppearance.RenderingMode.GRAPHIC);
-            appearance.setSignatureGraphic(Image.getInstance(IMG));
-
-            MakeSignature.signDetached(appearance, digest, pks, chain, null, null, null, 0, CryptoStandard.CMS);
-
+        if(!cryptoInitialized){
+            return;
         }
+
+        System.out.println("Signing...");
+        signWithNoPRINT();
+        System.out.println("Finished");
 
     }
 
@@ -181,34 +125,6 @@ public class PdfSingApp {
 
     }
 
-    public static void main(String[] args) throws GeneralSecurityException, IOException, DocumentException {
-
-        //-src D:\temp\hello.pdf -cert D:\temp\cert.p12 -pin pass123 -out D:\temp\res.pdf
-
-        System.out.println("Parsing parameters...");
-        parseParams(args);
-
-        System.out.println("Initializing parameters...");
-        initParams();
-
-        if(!paramsInitialized){
-            return;
-        }
-
-        System.out.println("BouncyCastle initialization...");
-        init();
-
-        if(!cryptoInitialized){
-            return;
-        }
-
-        System.out.println("Signing...");
-        signWithNoPRINT();
-
-        System.out.println("Finished");
-
-    }
-
     private static void initParams() {
 
         //SRC
@@ -266,8 +182,7 @@ public class PdfSingApp {
 
     }
 
-
-    static Rectangle getImgRectangle(Rectangle ps,float imgH,float imgW){
+    private static Rectangle getImgRectangle(Rectangle ps,float imgH,float imgW){
 
         switch (IMAGEPOS.toUpperCase()) {
             case "LD":
@@ -279,11 +194,86 @@ public class PdfSingApp {
             case "RD":
                 return new Rectangle(ps.getWidth()-padding-imgW, padding, ps.getWidth()-padding, padding+imgH);
             default:
-                    return new Rectangle(padding, padding, padding + imgW, padding+imgH);
+                return new Rectangle(padding, padding, padding + imgW, padding+imgH);
         }
 
 
 
     }
+
+    private static void parseParams(String[] args){
+
+        List<String> options = null;
+        for (int i = 0; i < args.length; i++) {
+            final String a = args[i];
+
+            if (a.charAt(0) == '-') {
+                if (a.length() < 2) {
+                    System.err.println("Error at argument " + a);
+                    return;
+                }
+
+                options = new ArrayList<>();
+                params.put(a.substring(1).toUpperCase(), options);
+            }
+            else if (options != null) {
+                options.add(a);
+            }
+            else {
+                System.err.println("Illegal parameter usage");
+                return;
+            }
+        }
+    }
+
+    private static void init(){
+
+        BouncyCastleProvider provider = new BouncyCastleProvider();
+        Security.addProvider(provider);
+
+        KeyStore ks;
+
+        try {
+            ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+            cryptoInitialized = false;
+            return;
+        }
+
+        InputStream stream;
+
+        if(useDefaultKeystore){
+            //stream = new FileInputStream(PdfSingApp.class.getResource("s.p12").getPath());
+            stream = PdfSingApp.class.getResourceAsStream("s.p12");
+            if (stream == null){
+                System.out.println("No default keystore found");
+                cryptoInitialized = false;
+                return;
+            }
+        }else{
+            try {
+                stream = new FileInputStream(KEYSTORE);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+                cryptoInitialized = false;
+                return;
+            }
+        }
+
+        try {
+            ks.load(stream, PASSWORD);
+            String alias = ks.aliases().nextElement();
+            pk = (PrivateKey) ks.getKey(alias, PASSWORD);
+            chain = ks.getCertificateChain(alias);
+            pks = new PrivateKeySignature(pk, "SHA512", "BC");
+            digest = new BouncyCastleDigest();
+        } catch (Exception e) {
+            e.printStackTrace();
+            cryptoInitialized = false;
+        }
+
+    }
+
 
 }
