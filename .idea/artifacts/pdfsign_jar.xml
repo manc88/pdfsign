@@ -1,6 +1,6 @@
 <component name="ArtifactManager">
   <artifact build-on-make="true" name="pdfsign:jar">
-    <output-path>D:/temp</output-path>
+    <output-path>$PROJECT_DIR$/out/jar</output-path>
     <root id="root">
       <element id="archive" name="pdfsign.jar">
         <element id="module-output" name="pdfsign" />

@@ -14,6 +14,9 @@ import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPublicKey;
 import java.util.*;
 
 
@@ -82,7 +85,9 @@ public class PdfSingApp {
 
         try (   InputStream resource = new FileInputStream(SRC);
                 OutputStream os = new FileOutputStream(TEMP)) {
+
             PdfReader reader = new PdfReader(resource);
+            int targetpage = reader.getNumberOfPages();
             PdfStamper stamper = new PdfStamper(reader, os);
             PdfFormField field = PdfFormField.createSignature(stamper.getWriter());
             field.setFieldName("SignaturePIK");
@@ -90,13 +95,13 @@ public class PdfSingApp {
             float w = img.getScaledWidth();
             float h = img.getScaledHeight();
 
-            Rectangle ps = reader.getPageSizeWithRotation(1);
+            Rectangle ps = reader.getPageSizeWithRotation(targetpage);
             Rectangle rect = getImgRectangle(ps,h,w);
             rect.setBorder(Rectangle.BOX);
             rect.setBorderWidth(2);
 
             field.setWidget(rect, PdfAnnotation.HIGHLIGHT_NONE);
-            stamper.addAnnotation(field, 1);
+            stamper.addAnnotation(field, targetpage);
             stamper.close();
 
         }
@@ -226,26 +231,29 @@ public class PdfSingApp {
         }
     }
 
+    private static X509Certificate createX509CertificateFromFile(final InputStream inputStream) throws IOException, CertificateException
+    {
+        // Load an X509 certificate from the specified certificate file name
+
+
+        final CertificateFactory certificateFactoryX509 = CertificateFactory.getInstance("X.509");
+        final X509Certificate certificate = (X509Certificate) certificateFactoryX509.generateCertificate(inputStream);
+        inputStream.close();
+
+        return certificate;
+    }
+
     private static void init(){
 
         BouncyCastleProvider provider = new BouncyCastleProvider();
         Security.addProvider(provider);
 
         KeyStore ks;
-
-        try {
-            ks = KeyStore.getInstance(KeyStore.getDefaultType());
-        } catch (KeyStoreException e) {
-            e.printStackTrace();
-            cryptoInitialized = false;
-            return;
-        }
-
         InputStream stream;
 
         if(useDefaultKeystore){
             //stream = new FileInputStream(PdfSingApp.class.getResource("s.p12").getPath());
-            stream = PdfSingApp.class.getResourceAsStream("s.p12");
+            stream = PdfSingApp.class.getResourceAsStream("s.crt");
             if (stream == null){
                 System.out.println("No default keystore found");
                 cryptoInitialized = false;
@@ -262,9 +270,29 @@ public class PdfSingApp {
         }
 
         try {
-            ks.load(stream, PASSWORD);
+           // ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            ks = KeyStore.getInstance("pkcs12");
+            ks.load(null, null);
+            X509Certificate clientCertificate = createX509CertificateFromFile(stream);
+            ks.setCertificateEntry("certificate", clientCertificate);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            cryptoInitialized = false;
+            return;
+        }
+
+
+        try {
+            //ks.load(stream, PASSWORD);
             String alias = ks.aliases().nextElement();
-            pk = (PrivateKey) ks.getKey(alias, PASSWORD);
+            //pk = (PrivateKey) ks.getKey(alias, PASSWORD);
+            Certificate cert=ks.getCertificate(alias);
+            PublicKey publicKey= cert.getPublicKey();
+
+            Key key=(PrivateKey) ks.getKey(alias,PASSWORD);
+            KeyPair kp= new KeyPair(publicKey,(PrivateKey) key);
+            pk = kp.getPrivate();
             chain = ks.getCertificateChain(alias);
             pks = new PrivateKeySignature(pk, "SHA512", "BC");
             digest = new BouncyCastleDigest();
